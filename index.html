@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Engineering Essentials — Fundamentals developers often miss</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
+  <meta name="description" content="A practical, in-depth handbook of software engineering fundamentals that many developers miss: enum flags & domain modeling, choosing the right numeric type, and more." />
+  <!-- Docsify theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
+  <!-- Prism (syntax highlighting) theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism-tomorrow.min.css" />
+  <style>
+    :root {
+      --theme-color: #3f6fff;
+      --theme-color-dark: #2a52cc;
+    }
+    /* Cover page background */
+    section.cover.show {
+      background: radial-gradient(circle at 20% 20%, #1b2a4a 0%, #0d1526 60%, #070b14 100%) !important;
+    }
+    section.cover .cover-main > p:last-child a {
+      border-radius: 8px;
+    }
+    section.cover h1 { color: #f4f7ff; }
+    section.cover blockquote p { color: #9fb3d8; }
+    section.cover .cover-main ul li { color: #c5d2ec; }
+
+    /* Readable body width and typography */
+    .markdown-section { max-width: 860px; }
+    .markdown-section h1 { padding-top: .4em; }
+    .markdown-section h2 {
+      border-bottom: 1px solid #eaecef; padding-bottom: .3em; margin-top: 2.2em;
+    }
+    .markdown-section p, .markdown-section li { line-height: 1.72; }
+
+    /* Inline code & code blocks */
+    .markdown-section code { color: #c0341d; background: #f6f6f6; }
+    .markdown-section pre { background: #2d2d2d; }
+    .markdown-section pre > code { color: #ccc; background: transparent; }
+
+    /* Callouts: !> important, ?> tip */
+    .markdown-section blockquote {
+      border-left: 4px solid var(--theme-color);
+      background: #f3f6ff; border-radius: 0 6px 6px 0;
+    }
+    .markdown-section blockquote.tip {
+      border-left-color: #f0ad4e; background: #fff8ee;
+    }
+    .markdown-section blockquote.warn {
+      border-left-color: #d9534f; background: #fdf2f2;
+    }
+
+    /* Tables */
+    .markdown-section table { display: table; width: 100%; }
+    .markdown-section th { background: #f6f8ff; }
+
+    /* TL;DR box */
+    .markdown-section .tldr {
+      background: #eef3ff; border: 1px solid #d3e0ff; border-radius: 8px;
+      padding: .2em 1.2em; margin: 1.4em 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">Loading Engineering Essentials…</div>
+  <script>
+    window.$docsify = {
+      name: 'Engineering Essentials',
+      repo: 'hoangsnowy/engineering-essentials',
+      loadSidebar: true,
+      loadNavbar: true,
+      coverpage: true,
+      onlyCover: false,
+      auto2top: true,
+      maxLevel: 4,
+      subMaxLevel: 3,
+      relativePath: false,
+      // Always load the root sidebar/navbar, even on nested routes
+      alias: {
+        '/.*/_sidebar.md': '/_sidebar.md',
+        '/.*/_navbar.md': '/_navbar.md'
+      },
+      search: {
+        placeholder: 'Search the book…',
+        noData: 'No results.',
+        depth: 4
+      },
+      pagination: {
+        previousText: 'Previous',
+        nextText: 'Next',
+        crossChapter: true,
+        crossChapterText: true
+      }
+    };
+  </script>
+  <!-- Docsify core -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4"></script>
+  <!-- Plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
+  <!-- Prism language components -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-csharp.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+</body>
+</html>

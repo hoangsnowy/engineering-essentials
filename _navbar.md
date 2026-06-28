@@ -1,0 +1,5 @@
+- [Home](/)
+- Chapters
+  - [1 · Enum Flags & Domain Modeling](chapters/01-enum-flags.md)
+  - [2 · Choosing the Right Numeric Type](chapters/02-numeric-types.md)
+- [GitHub](https://github.com/hoangsnowy/engineering-essentials)
