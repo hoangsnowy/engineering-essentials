@@ -1,6 +1,6 @@
 # 1 · Enum Flags & Domain Modeling
 
-> **TL;DR** — A plain `enum` is a *radio button*: exactly one choice. A `[Flags]` enum is a group of *checkboxes*: many choices packed into a single integer. When a concept is a **fixed, closed set of boolean options with no data of its own**, it is a *Value Object* and belongs in **one column**, not in a separate table joined many-to-many. Reach for a real entity and a join table only when each option earns its own identity, attributes, and lifecycle.
+> **TL;DR** — A plain `enum` is a *radio button*: exactly one choice. A `[Flags]` enum is a group of *checkboxes*: many choices packed into a single integer. When a concept is a **fixed, closed set of boolean options with no data of its own**, it is a *Value Object* (a domain value with no identity, see §1.7) and belongs in **one column**, not in a separate table joined many-to-many. Reach for a real entity and a join table only when each option earns its own identity, attributes, and lifecycle.
 
 ---
 
@@ -20,7 +20,7 @@ Number           Name                 AmenityId
 
 Three tables, a many-to-many relationship, a join on every read, two foreign keys to keep honest, and a migration every time the product team invents a new amenity checkbox. It works. It also encodes a misunderstanding.
 
-The amenities of a room are not five *things* with independent lives. They are **one fact** about the room: *which subset of a known menu does this room offer?* That fact is a single value. Modeling it as a relationship is like storing a person's RGB favourite-colour as three rows in a `ColorChannels` table.
+The amenities of a room are not five *things* with independent lives. They are **one fact** about the room: *which subset of a known menu does this room offer?* That fact is a single value (a *Value Object* — we make this precise in §1.7). Modeling it as a relationship is like storing a person's RGB favourite-colour as three rows in a `ColorChannels` table.
 
 This chapter is about seeing the difference, and the two tools that express it correctly: **enum flags** (the mechanism) and the **Value Object vs Entity** distinction from Domain-Driven Design (the principle behind the mechanism).
 
@@ -66,9 +66,11 @@ An `enum` is syntactic sugar over an integral constant. `BookingStatus.Confirmed
 
 A flags enum exploits a simple fact: an integer is a row of bits, and each bit is an independent yes/no. If every member is assigned a **distinct power of two**, then each member owns exactly one bit, and any *combination* of members is just those bits turned on together.
 
+Each member below is written `1 << n` — the number `1` *shifted left* `n` bit positions. `1 << 0` is `1`, `1 << 1` is `2`, `1 << 2` is `4`, and so on: successive powers of two, each lighting exactly one bit. (Shifting is covered in the C# [bitwise and shift operators](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/bitwise-and-shift-operators) reference.)
+
 ```csharp
 [Flags]
-public enum RoomAmenities
+public enum RoomAmenities : byte   // 8 bits — plenty for a small, fixed amenity menu
 {
     None        = 0,        // 0b0000_0000  — the empty set
     Wifi        = 1 << 0,   // 0b0000_0001  = 1
@@ -83,7 +85,15 @@ public enum RoomAmenities
 }
 ```
 
-A room that offers Wi‑Fi, breakfast and parking is stored as `1 | 2 | 4 = 7` — a single number, `0b0000_0111`. Read the bits back and you recover the exact set.
+A room that offers Wi‑Fi, breakfast and parking is stored as `1 | 2 | 4 = 7` — a single number, `0b0000_0111`. Read the bits back and you recover the exact set:
+
+```
+bit:     …  4    3    2    1    0
+flag:    … Pet  Pool Park Bfast Wifi
+value 7: …  0    0    1    1    1     → { Wifi, Breakfast, Parking }
+```
+
+> **Note — the backing type is part of the contract.** We chose `: byte` because the amenity menu is small and the value is persisted (§1.6). Once rows exist, **never change the backing type or renumber members** — the stored integers would silently change meaning. Pick the width once, deliberately ([Chapter 2](chapters/02-numeric-types.md)).
 
 ### Set theory, hiding in plain sight
 
@@ -103,9 +113,9 @@ With `n` independent bits there are exactly `2ⁿ` representable subsets. Five a
 
 ### Why powers of two, and why `None = 0`
 
-If two members shared a bit (say both equalled `3`), you could never tell them apart — turning one on would silently turn the other on. Distinct powers of two guarantee one bit per member, so the subset is unambiguous. And `None = 0` is the empty set: the natural, queryable representation of "no amenities," and the identity element for `|` (OR-ing `None` changes nothing).
+If two members shared a bit (say both equalled `3`), you could never tell them apart — turning one on would silently turn the other on. Distinct powers of two guarantee one bit per member, so the subset is unambiguous. And `None = 0` is the empty set: the natural, queryable representation of "no amenities," and the identity element for `|` (OR-ing `None` changes nothing). Microsoft's [Enum design guidelines](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/enum) spell out both rules: *use powers of two*, and *name the zero value `None`*.
 
-> **Pitfall** — `[Flags]` does **not** make the arithmetic work. It only changes how `ToString()` and `Enum.Parse` format the value (`"Wifi, Breakfast"` instead of `"3"`). The combining, testing and storing all come from the bit values *you* assign. Forget to use powers of two and the attribute will happily print nonsense. The attribute is documentation and formatting; the powers of two are the mechanism.
+> **Pitfall** — `[Flags]` does **not** make the arithmetic work. It only changes how `ToString()` and `Enum.Parse` format the value (`"Wifi, Breakfast"` instead of `"3"`). The combining, testing and storing all come from the bit values *you* assign. Forget to use powers of two and the attribute will happily print nonsense. The attribute is documentation and formatting; the powers of two are the mechanism. (See [`System.FlagsAttribute`](https://learn.microsoft.com/en-us/dotnet/api/system.flagsattribute).)
 
 ---
 
@@ -135,11 +145,18 @@ bool hasAnyMeal   = (amenities & RoomAmenities.Breakfast) != 0;
 bool hasPool      = amenities.HasFlag(RoomAmenities.Pool);
 ```
 
-> **`HasFlag` caveats.** `value.HasFlag(flag)` is exactly `(value & flag) == flag` — readable, and correct for "has all bits of `flag`." Two things to remember: (1) `HasFlag(None)` is **always `true`**, because every set contains the empty set; never test for "no amenities" with `HasFlag` — use `value == RoomAmenities.None`. (2) On legacy .NET Framework it boxed and was measurably slower in hot loops; on modern .NET it is fine. In a tight inner loop, the explicit `&` is still the safe choice.
+> **`HasFlag` caveats.** `value.HasFlag(flag)` is exactly `(value & flag) == flag` — readable, and correct for "has all bits of `flag`." Two things to remember: (1) `HasFlag(None)` is **always `true`**, because every set contains the empty set; never test for "no amenities" with `HasFlag` — use `value == RoomAmenities.None`. (2) On legacy .NET Framework it *boxed* (wrapped the enum value in a short-lived heap object, adding an allocation) and was measurably slower in hot loops; on modern .NET it is fine. In a tight inner loop, the explicit `&` is still the safe choice. (See [`Enum.HasFlag`](https://learn.microsoft.com/en-us/dotnet/api/system.enum.hasflag).)
+
+Flags values are also effectively **immutable** the way `int` is: `amenities |= Pool` does not mutate a set in place — it computes a new value and rebinds the variable, exactly like `i = i + 1`. That is part of why a flags value behaves like a *Value Object* (§1.7).
 
 ### Counting bits before they bite
 
-`int` has 32 bits, but the 32nd is the sign bit, so a plain `int`-backed flags enum comfortably holds **31** independent flags; need more and you should switch the backing type to `uint` or `long` (64 flags). If you find yourself approaching that ceiling, treat it as a design smell — see §1.9.
+An `int` has 32 bits, so an `int`-backed flags enum holds **32** independent flags — all of them usable. The only wrinkle: the 32nd flag is `1 << 31`, which flips the sign bit, so the *stored value goes negative*. That surprises people who inspect the raw number or filter it in plain SQL, but the bit logic still works perfectly. If you want every stored value to stay positive, stop at 31, or switch the backing type to `uint` or `long` (64 flags). Our `byte`-backed `RoomAmenities` tops out at 8 flags — more than enough for an amenity menu. Microsoft's [enum guidelines](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/enum) say the same: reach past 32 flags and the concept is probably a catalog, not a flag set — see §1.9.
+
+> **Try it yourself.** The repo ships a runnable console demo — [`demos/Chapter01EnumFlags.cs`](https://github.com/hoangsnowy/engineering-essentials/blob/main/demos/Chapter01EnumFlags.cs). From the `demos/` folder run `dotnet run -- 1`. Before you do, **predict the output**:
+> 1. What integer is `(int)(RoomAmenities.Wifi | RoomAmenities.Parking | RoomAmenities.PetFriendly)`?  *(answer: 1 + 4 + 16 = 21)*
+> 2. For a `{ Wifi, Breakfast }` room, is `(amenities & Resort) == Resort` true or false, and why?  *(false — `Resort` also needs Parking and Pool)*
+> 3. What does `amenities.HasFlag(RoomAmenities.None)` return?  *(true — the empty-set trap)*
 
 ---
 
@@ -158,10 +175,12 @@ public class Room
 // Right-size the column to match the backing type (Chapter 2):
 modelBuilder.Entity<Room>()
     .Property(r => r.Amenities)
-    .HasColumnType("tinyint");   // 1 byte: fine for up to 8 amenities
+    .HasColumnType("tinyint");   // 1 byte: matches the `: byte` enum, fits up to 8 amenities
 ```
 
-The resulting table is just `Rooms(Id, Number, Amenities)`. No `Amenities` table, no `RoomAmenities` join, no extra indexes, no cascade rules. Reads need no join. The set travels as 1–4 bytes on the wire and at rest.
+The resulting table is just `Rooms(Id, Number, Amenities)`. No `Amenities` table, no `RoomAmenities` join, no extra indexes, no cascade rules. Reads need no join. The set travels as a single byte on the wire and at rest.
+
+> **Why this maps automatically — and when it won't.** A flags enum persists with no extra config because it is *already a single scalar* (one integer). A multi-field Value Object — like `Money` (amount + currency, §1.7 and [Chapter 2](chapters/02-numeric-types.md)) — is also stored inside its owner, but because it spans more than one column EF Core needs you to say so explicitly with [owned entity types (`OwnsOne`)](https://learn.microsoft.com/en-us/ef/core/modeling/owned-entities) or a [value converter](https://learn.microsoft.com/en-us/ef/core/modeling/value-conversions). Same DDD idea, different EF Core plumbing.
 
 ### Querying a bitmask in SQL
 
@@ -173,7 +192,9 @@ SELECT * FROM Rooms WHERE (Amenities & 3) = 3;
 SELECT * FROM Rooms WHERE (Amenities & 12) <> 0;
 ```
 
-> **The honest caveat.** A bitwise predicate is **non-sargable**: the database cannot use an ordinary B-tree index on `Amenities` to satisfy `(Amenities & 3) = 3`, so it scans. For a few thousand rooms this is irrelevant. If you operate at a scale where you constantly filter millions of rows by a *single* amenity, that recurring relational query is itself a signal that the amenity may want to be a first-class, indexable thing — which is the §1.8 decision, not a reason to fear flags.
+The `&` here is SQL Server's [bitwise AND operator](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/bitwise-operators-transact-sql) — the same set-membership test as in C#.
+
+> **The honest caveat.** A bitwise predicate is **non-sargable**: the database can't use an ordinary B-tree index on `Amenities` to jump straight to matching rows, so it reads every row and tests the bits (a full *scan*). ("Sargable" = *Search-ARGument-able*, i.e. index-usable; a B-tree is the ordinary sorted index that powers `=`/`<`/`>` lookups.) For a few thousand rooms this is irrelevant. If you operate at a scale where you constantly filter millions of rows by a *single* amenity, that recurring relational query is itself a signal that the amenity may want to be a first-class, indexable thing — which is the §1.8 decision, not a reason to fear flags.
 
 ---
 
@@ -183,9 +204,9 @@ Flags are the mechanism. The reason they are *correct* here comes from Domain-Dr
 
 **Entity** — something defined by a continuous **identity** that persists through change. A `Booking` is the same booking even after its dates, status, and guest all change; `Booking #4471` yesterday is `Booking #4471` today. Entities have a lifecycle (created, modified, archived) and are compared **by id**.
 
-**Value Object** — something defined entirely by its **values**, with no identity of its own. `Money(120.00, "USD")` is interchangeable with any other `Money(120.00, "USD")`; a `DateRange(Jun 3 → Jun 7)` is just those two dates. Value Objects are **immutable**, compared **by value**, and — crucially for our purposes — **persisted as part of the entity that owns them**, not as independent rows.
+**Value Object** — something defined entirely by its **values**, with no identity of its own. `Money(120.00, "USD")` is interchangeable with any other `Money(120.00, "USD")`; a `DateRange(Jun 3 → Jun 7)` is just those two dates. Value Objects are **immutable** (their values never change after construction — to "change" one you build a new one) and compared **by value**. In the common case they are **persisted as part of the entity that owns them** rather than as independent rows — though that is a persistence choice, not part of the definition. Microsoft's DDD guide, [Implementing value objects](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/implement-value-objects), works through both the equality semantics and the EF Core mapping.
 
-Now place "the amenities of a room" on that spectrum. Does a particular *Wi‑Fi-ness* have an identity that we track over time? No. Is the set defined entirely by which options are on? Yes. Is it interchangeable — is this room's `{Wifi, Pool}` the very same value as that room's `{Wifi, Pool}`? Yes. **It is a Value Object.** And Value Objects live *inside* their owner — here, as one column on `Room`.
+Now place "the amenities of a room" on that spectrum. Does a particular *Wi‑Fi-ness* have an identity that we track over time? No. Is the set defined entirely by which options are on? Yes. Is it interchangeable — is this room's `{Wifi, Pool}` the very same value as that room's `{Wifi, Pool}`? Yes. **It is a Value Object.** And so it lives *inside* its owner — here, as one column on `Room`.
 
 The many-to-many table from §1.1 mis-promotes a Value Object to an Entity. It hands "amenity" an identity (`Amenities.Id`), a table, a lifecycle, and relationships it does not need, and it pays for that mistake on every read, every write, and every migration.
 
@@ -234,14 +255,14 @@ public enum BookingStatus : byte { Pending, Confirmed, CheckedIn, CheckedOut, Ca
 [Flags] public enum RoomAmenities : byte
 { None = 0, Wifi = 1, Breakfast = 2, Parking = 4, Pool = 8, PetFriendly = 16 }
 
-// CHECKBOXES, BUT each option has price + inventory + is admin-editable
+// CHECKBOXES, BUT each option has its own identity, lifecycle, and data
 //   → these are ENTITIES, and the relationship is a real many-to-many
 public class ExtraService                 // Airport pickup, spa, late checkout...
 {
-    public int Id { get; set; }
+    public int Id { get; set; }                     // its own identity
     public string Name { get; set; } = default!;
-    public Money Price { get; set; } = default!;   // own attribute → it's an Entity
-    public bool IsActive { get; set; }              // own lifecycle
+    public Money Price { get; set; } = default!;    // an attribute it carries
+    public bool IsActive { get; set; }              // its own lifecycle (admin toggles it)
 }
 
 public class BookingExtraService          // the justified join table
@@ -252,7 +273,7 @@ public class BookingExtraService          // the justified join table
 }
 ```
 
-Notice the booking domain needs **both** shapes, and the choice is not about taste — it is about whether each option carries identity and data. Amenities are a Value Object (flags). Extra services are Entities (table + M:N) because they have a price, can be toggled on by an admin tomorrow, and you must report revenue per service. Same UI checkboxes; different domain truth; different storage.
+Notice the booking domain needs **both** shapes, and the choice is not about taste — it is about whether each option carries identity and a lifecycle. Amenities are a Value Object (flags). Extra services are Entities (table + M:N) because they have their own identity, can be toggled on by an admin tomorrow, and you must report revenue per service. Same UI checkboxes; different domain truth; different storage.
 
 > **Rule of thumb** — *Checkboxes whose options never need a row of their own → flags. Checkboxes whose options are things in their own right → a table.* Ask "does this option have a price, a description users see, an admin who edits it, or a report that counts it?" One yes, and it is an Entity.
 
@@ -264,7 +285,7 @@ Flags are a precision tool, not a hammer. Prefer the relational model when:
 
 - **The set is open.** Options are added by users/admins at runtime. Bits are assigned by a programmer at compile time; you cannot ship a deploy every time marketing invents a feature.
 - **Options carry data.** The moment an "option" needs a price, a localized label, an icon, an effective date, or an audit trail, it is an Entity.
-- **You exceed the bit budget.** Past ~31 flags (`int`) or 64 (`long`) you are out of bits; needing that many is itself a sign the concept is a catalog, not a flag set.
+- **You exceed the bit budget.** Past 32 flags (`int` — where the 32nd already stores as a negative) or 64 (`long`) you are out of bits; needing that many is itself a sign the concept is a catalog, not a flag set.
 - **You need relational integrity or per-option analytics.** Foreign keys, `GROUP BY option`, indexed lookups per option — these want rows.
 - **Auditing individual toggles matters.** "Who enabled the pool on 12 May?" is an entity/event question, not a bitmask.
 
@@ -279,5 +300,17 @@ And a couple of mechanical warnings: never **renumber existing flags** once valu
 3. A fixed set of attribute-less options is a **Value Object** — store it **inline, in one right-sized column**, not as an Entity behind a many-to-many table.
 4. The "1NF violation" objection is a category error: a bitmask is one atomic scalar. The real test is whether each option needs to be a **first-class row** you join, constrain, attach data to, or report on.
 5. Promote to an **Entity + join table** the instant an option earns its own identity, attributes, lifecycle, or relational queries — as `ExtraService` does and `RoomAmenities` does not.
+
+---
+
+## 1.11 References (Microsoft Learn)
+
+- [Enumeration types (C# reference)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/enum)
+- [`System.FlagsAttribute`](https://learn.microsoft.com/en-us/dotnet/api/system.flagsattribute) · [`Enum.HasFlag`](https://learn.microsoft.com/en-us/dotnet/api/system.enum.hasflag)
+- [Bitwise and shift operators (C# reference)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/bitwise-and-shift-operators)
+- [Enum design — Framework design guidelines](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/enum)
+- [Implementing value objects — .NET DDD guide](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/implement-value-objects)
+- [EF Core — Owned entity types](https://learn.microsoft.com/en-us/ef/core/modeling/owned-entities) · [Value conversions](https://learn.microsoft.com/en-us/ef/core/modeling/value-conversions)
+- [Bitwise operators (Transact-SQL)](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/bitwise-operators-transact-sql) · [int, bigint, smallint, and tinyint (Transact-SQL)](https://learn.microsoft.com/en-us/sql/t-sql/data-types/int-bigint-smallint-and-tinyint-transact-sql)
 
 > Next: the same right-sizing instinct, applied to numbers — why defaulting every column to `int` quietly wastes bandwidth, storage, and money, and how to choose between `decimal`, `double`, and `float`. → [Chapter 2](chapters/02-numeric-types.md)

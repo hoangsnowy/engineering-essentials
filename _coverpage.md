@@ -7,5 +7,5 @@
 - Deep explanations with practical **C# / .NET** examples
 - One running example throughout: a **hotel booking** system
 
-[Read the book](#engineering-essentials)
+[Read the book](#/)
 [GitHub](https://github.com/hoangsnowy/engineering-essentials)

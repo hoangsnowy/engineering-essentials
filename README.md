@@ -34,6 +34,16 @@ Planned / candidate chapters (suggestions welcome):
 - Time, time zones, and `DateTimeOffset`
 - Indexing fundamentals & query cost
 
+## Runnable C# demos
+
+Every chapter ships with a runnable console demo under [`demos/`](demos/) — they print their results so you can run them live in a tech-sharing session and let the room predict the output first. Requires the .NET SDK (project targets **net8.0**).
+
+```bash
+cd demos
+dotnet run -- 1   # Chapter 1 — Enum Flags & Domain Modeling
+dotnet run -- 2   # Chapter 2 — Numeric Types
+```
+
 ## Run it locally
 
 The site is [Docsify](https://docsify.js.org) — pure static files, no build step.
