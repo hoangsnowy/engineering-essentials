@@ -4,5 +4,6 @@ obj/
 
 # IDE
 .vs/
+.vscode/
 .idea/
 *.user
