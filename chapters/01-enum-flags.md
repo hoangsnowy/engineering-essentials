@@ -186,15 +186,44 @@ The resulting table is just `Rooms(Id, Number, Amenities)`. No `Amenities` table
 
 ### Querying a bitmask in SQL
 
-```sql
--- Rooms that have BOTH Wi-Fi(1) and Breakfast(2):  mask = 3
-SELECT * FROM Rooms WHERE (Amenities & 3) = 3;
+The classic question is *"give me every room with Wi-Fi."* A Wi-Fi room can be stored as **many different integers** — `1` ({Wifi}), `3` ({Wifi, Breakfast}), `21` ({Wifi, Parking, PetFriendly}) — because the *other* amenities set *other* bits. So how does one predicate catch them all, and how does it ignore the bits you didn't ask about?
 
--- Rooms that have ANY of Pool(8) or Parking(4):    mask = 12
+Mask away everything except the bit you care about. `Amenities & 1` zeroes every bit but bit 0 (Wi-Fi), because AND-ing any bit with `0` yields `0`. The result is `1` exactly when Wi-Fi is on — whatever the rest of the bits are:
+
+| Room | Amenities (set) | Stored | `& 1` | Has Wi-Fi? |
+|---|---|---|---|---|
+| 101 | {Wifi} | `1` = `0b00001` | `1` | ✓ |
+| 102 | {Wifi, Breakfast} | `3` = `0b00011` | `1` | ✓ |
+| 103 | {Breakfast, Parking} | `6` = `0b00110` | `0` | ✗ |
+| 104 | {Wifi, Parking, PetFriendly} | `21` = `0b10101` | `1` | ✓ |
+| 105 | {Pool} | `8` = `0b01000` | `0` | ✗ |
+
+```sql
+-- Every room with Wi-Fi (bit 0), regardless of any other amenity:
+SELECT * FROM Rooms WHERE (Amenities & 1) = 1;     -- rows 101, 102, 104
+
+-- BOTH Wi-Fi(1) AND Pool(8):    mask = 9,  result must EQUAL the mask
+SELECT * FROM Rooms WHERE (Amenities & 9) = 9;
+
+-- ANY of Pool(8) or Parking(4): mask = 12, result just non-zero
 SELECT * FROM Rooms WHERE (Amenities & 12) <> 0;
 ```
 
-The `&` here is SQL Server's [bitwise AND operator](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/bitwise-operators-transact-sql) — the same set-membership test as in C#.
+The pattern generalizes: **AND with a mask projects the value onto only the bits in that mask**, so the bits you didn't ask about literally cannot affect the answer. `(Amenities & mask) = mask` means "has **all** of mask"; `(Amenities & mask) <> 0` means "has **any** of mask". That is exactly the *Membership* row of the §1.4 table, applied to one or several bits at once. The `&` is SQL Server's [bitwise AND operator](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/bitwise-operators-transact-sql) — the same set-membership test as in C#.
+
+In EF Core you write the same test in LINQ and it translates to that SQL `&` predicate:
+
+```csharp
+// WHERE (Amenities & 1) = 1
+var withWifi = db.Rooms
+    .Where(r => (r.Amenities & RoomAmenities.Wifi) == RoomAmenities.Wifi)
+    .ToList();
+
+// EF Core also translates HasFlag to the same bitwise predicate:
+var withWifiToo = db.Rooms
+    .Where(r => r.Amenities.HasFlag(RoomAmenities.Wifi))
+    .ToList();
+```
 
 > **The honest caveat.** A bitwise predicate is **non-sargable**: the database can't use an ordinary B-tree index on `Amenities` to jump straight to matching rows, so it reads every row and tests the bits (a full *scan*). ("Sargable" = *Search-ARGument-able*, i.e. index-usable; a B-tree is the ordinary sorted index that powers `=`/`<`/`>` lookups.) For a few thousand rooms this is irrelevant. If you operate at a scale where you constantly filter millions of rows by a *single* amenity, that recurring relational query is itself a signal that the amenity may want to be a first-class, indexable thing — which is the §1.8 decision, not a reason to fear flags.
 

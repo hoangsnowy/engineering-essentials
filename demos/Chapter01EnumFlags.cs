@@ -55,6 +55,7 @@ internal static class Chapter01EnumFlags
         TheBitMechanism();
         SetAlgebra();
         HasFlagTrap();
+        QueryByAmenity();
         BitBudgetTruth();
         ValueObjectVsEntity();
     }
@@ -123,6 +124,35 @@ internal static class Chapter01EnumFlags
         Ui.Show("a.HasFlag(None)  <-- trap", a.HasFlag(RoomAmenities.None)); // true!
         Ui.Note("Never test \"no amenities\" with HasFlag(None). Use: a == RoomAmenities.None");
         Ui.Show("a == None (correct empty test)", a == RoomAmenities.None); // false
+    }
+
+    private static void QueryByAmenity()
+    {
+        Ui.Section("Query \"rooms with Wi-Fi\" — other bits don't matter");
+
+        // Same room stores DIFFERENT integers depending on its other amenities.
+        var rooms = new (int No, RoomAmenities A)[]
+        {
+            (101, RoomAmenities.Wifi),                                                   // 1
+            (102, RoomAmenities.Wifi | RoomAmenities.Breakfast),                         // 3
+            (103, RoomAmenities.Breakfast | RoomAmenities.Parking),                      // 6
+            (104, RoomAmenities.Wifi | RoomAmenities.Parking | RoomAmenities.PetFriendly), // 21
+            (105, RoomAmenities.Pool),                                                   // 8
+        };
+
+        foreach (var r in rooms)
+        {
+            // The membership test: mask out every bit except Wi-Fi(1).
+            bool hasWifi = (r.A & RoomAmenities.Wifi) == RoomAmenities.Wifi;
+            Ui.Show($"Room {r.No}  stored={(byte)r.A,2}  (A & Wifi)==Wifi", hasWifi);
+        }
+
+        // This is exactly what EF Core turns into  WHERE (Amenities & 1) = 1
+        var withWifi = rooms
+            .Where(r => (r.A & RoomAmenities.Wifi) == RoomAmenities.Wifi)
+            .Select(r => r.No);
+        Ui.Show("rooms with Wi-Fi", string.Join(", ", withWifi));
+        Ui.Note("(A & 1) zeroes every other bit, so it's 1 iff Wi-Fi is on — the rest can't change it.");
     }
 
     private static void BitBudgetTruth()
