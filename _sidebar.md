@@ -14,5 +14,6 @@
 
 - More
 
+  - [Glossary](glossary.md)
   - [Runnable C# demos](https://github.com/hoangsnowy/engineering-essentials/tree/main/demos)
   - [Roadmap & contributing](/)

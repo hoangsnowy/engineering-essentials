@@ -2,6 +2,8 @@
 
 > **TL;DR** — Defaulting every number to `int` and every fraction to `double` is two bugs wearing a trenchcoat. The first wastes storage, bandwidth, and money at scale; the second silently corrupts money values. Right-size integers where the cost **multiplies** (database columns, wire payloads, large arrays), and use **`decimal` for money, `double` for measurements, `float` almost never** in business code.
 
+> Hit an unfamiliar term (precision/scale, CLS-compliant, banker's rounding)? The [Glossary](glossary.md) defines each in one line.
+
 ---
 
 ## 2.1 The symptom

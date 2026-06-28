@@ -24,6 +24,8 @@ To keep things concrete, the whole book models one familiar domain — a **hotel
 
 2. [Choosing the Right Numeric Type](chapters/02-numeric-types.md) — why defaulting everything to `int` wastes bandwidth, storage, and money; integer sizing; and the `decimal` vs `double` vs `float` decision that protects your money values.
 
+New to a term? The [Glossary](glossary.md) defines the jargon (sargable, CLS-compliant, banker's rounding, …) in one line each.
+
 ## Roadmap
 
 Planned / candidate chapters (suggestions welcome):

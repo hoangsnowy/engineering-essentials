@@ -2,6 +2,8 @@
 
 > **TL;DR** — A plain `enum` is a *radio button*: exactly one choice. A `[Flags]` enum is a group of *checkboxes*: many choices packed into a single integer. When a concept is a **fixed, closed set of boolean options with no data of its own**, it is a *Value Object* (a domain value with no identity, see §1.7) and belongs in **one column**, not in a separate table joined many-to-many. Reach for a real entity and a join table only when each option earns its own identity, attributes, and lifecycle.
 
+> Hit an unfamiliar term (bitmask, sargable, Value Object)? The [Glossary](glossary.md) defines each in one line.
+
 ---
 
 ## 1.1 The symptom
