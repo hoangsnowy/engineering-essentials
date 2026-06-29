@@ -312,15 +312,93 @@ Notice the booking domain needs **both** shapes, and the choice is not about tas
 
 ## 1.9 When **not** to use flags
 
-Flags are a precision tool, not a hammer. Prefer the relational model when:
+Flags are a precision tool, not a hammer. Each rule below comes with the concrete failure you hit if you ignore it, and the model that fixes it.
 
-- **The set is open.** Options are added by users/admins at runtime. Bits are assigned by a programmer at compile time; you cannot ship a deploy every time marketing invents a feature.
-- **Options carry data.** The moment an "option" needs a price, a localized label, an icon, an effective date, or an audit trail, it is an Entity.
-- **You exceed the bit budget.** Past 32 flags (`int` — where the 32nd already stores as a negative) or 64 (`long`) you are out of bits; needing that many is itself a sign the concept is a catalog, not a flag set.
-- **You need relational integrity or per-option analytics.** Foreign keys, `GROUP BY option`, indexed lookups per option — these want rows.
-- **Auditing individual toggles matters.** "Who enabled the pool on 12 May?" is an entity/event question, not a bitmask.
+### 1.9.1 The set is open — options born at runtime
 
-And a couple of mechanical warnings: never **renumber existing flags** once values are persisted (the stored integers would silently change meaning), and reserve `0` for `None` forever.
+Bits are assigned by a *programmer* at *compile time*. The moment options are created by users or admins while the app runs, flags break:
+
+```csharp
+[Flags] public enum ExtraServices : long
+{ None = 0, AirportPickup = 1, Spa = 2, LateCheckout = 4 }   // ← frozen at build time
+```
+
+Marketing adds "EV charging" on Tuesday. There is no bit for it, and you cannot mint one without a code change, a redeploy, and a migration — and an admin screen that *creates* services is outright impossible. That is an **Entity catalog**, a table whose rows are born at runtime:
+
+```csharp
+public class ExtraService
+{
+    public int Id { get; set; }                  // an admin INSERTs new rows, no deploy
+    public string Name { get; set; } = default!;
+    public bool IsActive { get; set; }
+}
+```
+
+> *If a non-developer can add an option, it is a row, not a bit.*
+
+### 1.9.2 Options carry their own data
+
+A flag is one bit: it can say *on/off* and nothing else. The instant an option needs a price, a localized label, an icon, an effective date, or an audit trail, the bit has nowhere to put it:
+
+```csharp
+// Flags can record THAT breakfast is offered — never its price, label, or icon.
+[Flags] public enum RoomAmenities : byte { None = 0, Wifi = 1, Breakfast = 2 /* …how much? */ }
+```
+
+If the product wants "breakfast +€15, shown with this icon, in the guest's language," that data hangs off an Entity:
+
+```csharp
+public class Amenity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = default!;
+    public Money? Surcharge { get; set; }        // its own attribute
+    public string IconUrl { get; set; } = default!;
+}
+```
+
+A plain Wi-Fi/parking checkbox with *no* such data stays a flag — that is exactly the §1.8 line.
+
+### 1.9.3 You exceed the bit budget
+
+`int` gives 32 flag bits, `long` gives 64 (§1.5). A SaaS feature-toggle set that grows to 200 entries has no integer wide enough — and you'd hit the bit-31 sign flip on the way. Needing hundreds of options is itself the signal that the concept is a **catalog**, not a flag set: store it as rows, or as a dedicated set type. Bolting "two `long`s side by side" together is a homemade bitset begging to be a table.
+
+### 1.9.4 You need relational integrity or per-option analytics
+
+The killer is the report. Finance asks: *"revenue per extra service this quarter."* With services packed into a bitmask there is no `ServiceId` to group by — you'd unpack every bit of every row in application code. With the join table from §1.8 it's one query:
+
+```sql
+-- Trivial with rows; near-impossible on a packed bitmask:
+SELECT   s.Name, SUM(bx.Quantity) AS Sold
+FROM     BookingExtraService bx
+JOIN     ExtraService s ON s.Id = bx.ExtraServiceId
+GROUP BY s.Name;
+```
+
+Foreign keys, `GROUP BY option`, per-option indexed lookups — these are relational operations, and relations want rows. A bitmask deliberately discards the per-option identity those queries need.
+
+### 1.9.5 Auditing individual toggles matters
+
+A bitmask stores only the *current* set — no actor, no timestamp, no history. It cannot answer *"who enabled the pool on 12 May, and when?"* That is an event stream, its own Entity:
+
+```csharp
+public class RoomAmenityChange
+{
+    public long Id { get; set; }
+    public int RoomId { get; set; }
+    public RoomAmenities Amenity { get; set; }     // which bit changed
+    public bool Enabled { get; set; }              // turned on or off
+    public string ChangedBy { get; set; } = default!;
+    public DateTimeOffset ChangedAt { get; set; }
+}
+```
+
+The flags column can still hold the *current* state; the history needs its own rows.
+
+### Two mechanical traps (even when flags ARE right)
+
+- **Never renumber persisted flags.** Reorder the enum so `Parking` shifts from `4` to `8` and every `4` already in the database silently becomes whatever now owns bit `2`. Stored integers are a contract: *appending* new powers of two is safe, *renumbering* existing ones is data corruption with no error and no warning.
+- **Reserve `0` for `None` forever.** `0` is the empty set and the default of a fresh column; give a real amenity the value `0` and "no amenities" becomes indistinguishable from "has amenity X."
 
 ---
 

@@ -33,6 +33,14 @@ internal enum RoomAmenities : byte
     Resort   = Wifi | Breakfast | Parking | Pool, // = 15
 }
 
+// ── §1.9 trap: the SAME persisted bytes, reinterpreted by a "tidied" enum.
+//    v1 is what got written to the database…
+[Flags]
+internal enum AmenitiesV1 : byte { None = 0, Wifi = 1, Breakfast = 2, Parking = 4 }
+//    …v2 inserts Pool before Parking, renumbering Parking from 4 to 8.
+[Flags]
+internal enum AmenitiesV2 : byte { None = 0, Wifi = 1, Breakfast = 2, Pool = 4, Parking = 8 }
+
 // ── Value Object: defined entirely by its values, no identity, compared by value.
 internal readonly record struct Money(decimal Amount, string Currency);
 
@@ -58,6 +66,7 @@ internal static class Chapter01EnumFlags
         QueryByAmenity();
         BitBudgetTruth();
         ValueObjectVsEntity();
+        RenumberingTrap();
     }
 
     private static void RadioVsCheckbox()
@@ -185,5 +194,19 @@ internal static class Chapter01EnumFlags
         Ui.Note("Amenities = Value Object  -> flags, one column.");
         Ui.Note("ExtraService = Entity (price, admin-editable, reported on) -> table + many-to-many.");
         Ui.Note("Test: does the option have a price, a label users see, an admin who edits it, a report that counts it?");
+    }
+
+    private static void RenumberingTrap()
+    {
+        Ui.Section("§1.9 trap — renumbering persisted flags corrupts data silently");
+
+        // A room saved long ago as Parking. On disk it is just the byte 4.
+        const byte stored = 4;
+
+        Ui.Show("stored byte", stored);
+        Ui.Show("read as AmenitiesV1 (original)", (AmenitiesV1)stored);   // Parking
+        Ui.Show("read as AmenitiesV2 (renumbered)", (AmenitiesV2)stored); // Pool  ← same bytes!
+        Ui.Note("Inserting Pool=4 shifted Parking to 8. Every old '4' now reads as Pool. No error, no warning.");
+        Ui.Note("Rule: APPEND new powers of two; never RENUMBER existing members once rows exist.");
     }
 }
