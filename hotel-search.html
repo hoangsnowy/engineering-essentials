@@ -46,6 +46,9 @@
     pre{background:#2d2d2d; color:#e6e6e6; border-radius:10px; padding:12px 14px; overflow:auto;
       font-size:.82rem; margin:.6em 0 0}
     pre .kw{color:#7aa2ff} pre .num{color:#f7a96b} pre .str{color:#9ece6a}
+    pre .ty{color:#56b6c2} pre .cmt{color:#7f8aa0; font-style:italic}
+    .codelabel{font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:14px 0 4px}
+    .codelabel:first-of-type{margin-top:6px}
     .rooms{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px}
     @media (max-width:520px){ .rooms{grid-template-columns:1fr} }
     .room{border:1px solid var(--line); border-radius:10px; padding:10px 12px}
@@ -102,7 +105,15 @@
       <div class="kv"><span><code>[Flags]</code> ToString()</span> <b id="maskStr">None</b></div>
       <div class="kv"><span>Room type enum</span> <b id="typeVal">Any</b></div>
 
+      <div class="codelabel">SQL the database runs</div>
       <pre id="sql"></pre>
+
+      <div class="codelabel">EF Core · the LINQ that generates it</div>
+      <pre id="linq"></pre>
+      <div style="font-size:.74rem; color:var(--muted); margin-top:6px">
+        Same typed enum, no raw SQL — EF Core translates it to the <code>&amp;</code> predicate above
+        (check with <code>.ToQueryString()</code>).
+      </div>
     </div>
   </div>
 
@@ -203,6 +214,25 @@
     }
     const clause = where.length ? '\n<span class="kw">WHERE</span> ' + where.join('\n  <span class="kw">AND</span> ') : '';
     $('sql').innerHTML = `<span class="kw">SELECT</span> * <span class="kw">FROM</span> Rooms${clause};`;
+
+    // generated EF Core LINQ — the same membership test, on the typed enum
+    const ty = (t, m) => `<span class="ty">${t}</span>.${m}`;
+    const maskExpr = mask === 0
+      ? ty('RoomAmenities', 'None')
+      : AMENITIES.filter(a => (mask & a.bit) === a.bit)
+                 .map(a => ty('RoomAmenities', a.name))
+                 .join(' <span class="kw">|</span> ');
+    const linq = [];
+    if (mask !== 0) linq.push(`<span class="kw">var</span> mask = ${maskExpr};   <span class="cmt">// ${mask}</span>`, '');
+    linq.push('db.Rooms');
+    if (type !== 'Any') linq.push(`  .Where(r =&gt; r.Type == ${ty('RoomType', type)})`);
+    if (mask !== 0) {
+      linq.push(mode === 'all'
+        ? `  .Where(r =&gt; (r.Amenities <span class="kw">&</span> mask) == mask)   <span class="cmt">// has ALL</span>`
+        : `  .Where(r =&gt; (r.Amenities <span class="kw">&</span> mask) != <span class="num">0</span>) <span class="cmt">// has ANY</span>`);
+    }
+    linq.push('  .ToList();');
+    $('linq').innerHTML = linq.join('\n');
 
     // filter rooms
     const hits = ROOMS.filter(r => {
