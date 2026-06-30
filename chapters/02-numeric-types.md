@@ -10,15 +10,15 @@
 
 Open almost any schema and you will find it: `Age INT`, `NumberOfGuests INT`, `StarRating INT`, `FloorNumber INT` — every whole number, regardless of its real range, declared as a 4-byte integer because `int` is what the fingers type by default. A few columns over, the more dangerous one: `TotalAmount FLOAT` or `Price FLOAT` — money stored in a binary floating-point type that *cannot represent ten cents exactly*.
 
-Neither mistake fails a unit test on Tuesday. Both cost real money — one on the cloud bill, the other in a reconciliation report that is off by a penny and nobody can explain.
+Neither mistake fails a unit test on Tuesday. Both cost real money — one on the cloud bill, the other in *reconciliation*: the routine check that what the system says it charged equals what actually moved. When the two disagree by a single cent, no customer notices, but accounting can't close the books until someone finds out *why* — and "the type was off by a hair" is a needle in a haystack of millions of rows.
 
-A type is not just "a place to put a number." It is a contract about **range, precision, exactness, storage width, and wire size**. Choosing it deliberately is one of the cheapest forms of engineering leverage there is.
+A type is not just "a place to put a number." It is a contract about **range, precision, exactness, storage width, and wire size**. But underneath all five sits a single question that decides them: *what kind of quantity is this?* A guest count and a price are both "numbers" the way a heartbeat and a coastline are both lengths — superficially alike, structurally opposite. One is **counted**: discrete, exact, bounded. The other is **measured**: continuous, approximate, open-ended. Almost every choice in this chapter falls out of getting that one distinction right, because choosing the type is how you encode what the number *means* into the one place the compiler and the database can both read it. It costs one keystroke to choose well and a billion rows to choose badly — few decisions in software have that lopsided a payoff.
 
 ---
 
 ## 2.2 Where size actually costs (and where it doesn't)
 
-Be precise about *why* an oversized integer is wasteful, because the intuition "smaller type = less memory" is only sometimes true.
+We'll take the two bugs in order. This section and the next are about the cheap one — *waste* — and exactly where it stops being cheap; then 2.4 turns to the expensive one. "Smaller type = less memory" is the instinct, and it's only sometimes true. The trick is knowing *where* an oversized integer actually costs you: in one place the waste multiplies across your whole system, and in another it evaporates the moment the CLR pads it away.
 
 **Where right-sizing pays, because the cost multiplies:**
 
@@ -46,7 +46,7 @@ Be precise about *why* an oversized integer is wasteful, because the intuition "
 A few sharp edges worth knowing:
 
 - **`tinyint` is unsigned `0–255`** in SQL Server and maps cleanly to C# `byte`. There is no 1-byte *signed* SQL type, and C# `sbyte`/`uint`/`ulong` are not *CLS-compliant* — i.e. not guaranteed usable from every .NET language (the [Common Language Specification](https://learn.microsoft.com/en-us/dotnet/standard/language-independence) is the shared subset all languages support) — so for public APIs prefer the signed CLS types and pick width by range.
-- **`NumberOfGuests INT` is 4 bytes to store a value that never exceeds, what, 20?** `tinyint` (1 byte) covers it with a built-in `0–255` sanity bound. The type itself documents and enforces the domain.
+- **`NumberOfGuests INT` is 4 bytes to store a value that never exceeds, what, 20?** `tinyint` (1 byte) covers it with a built-in `0–255` sanity bound. And that bound is the quiet win: a narrow type is the cheapest validation you'll ever write, because you don't write it. There's no `if (guests < 0)` to forget, no check to skip under deadline — the range is enforced by the column's existence, on every insert, forever. The type doesn't just *describe* the domain; it makes the impossible value unstorable.
 - **Surrogate keys: think about the ceiling.** A *surrogate key* is an artificial primary key — typically an auto-increment `Id` — that stands in for the row instead of any real-world data. `int` tops out near 2.15 billion. For `Booking.Id` in a busy global product that can be a real horizon; `bigint` is the safe default for high-volume tables, and the 4 extra bytes per row are justified there precisely because they *aren't* justified everywhere.
 
 ```csharp
@@ -66,9 +66,11 @@ public class Hotel
 
 (See [Integral numeric types (C# reference)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/integral-numeric-types) and SQL Server [int, bigint, smallint, and tinyint](https://learn.microsoft.com/en-us/sql/t-sql/data-types/int-bigint-smallint-and-tinyint-transact-sql).)
 
+That's the whole integer story: the type is a *range declaration* the compiler and database both enforce, and you pay for it only where it multiplies. Picking the wrong width costs bytes. The next choice — the one for fractions — can cost correctness, and a wrong cent never shows up as a slow query. It shows up in a reconciliation report that won't balance.
+
 ---
 
-## 2.4 Floating point vs decimal — three types, two different jobs
+## 2.4 Floating point vs decimal — exact or approximate, decided by the base
 
 For fractional numbers, .NET gives three choices. The split that matters is **base-2 vs base-10**, because it decides *exactness*.
 
@@ -78,7 +80,7 @@ For fractional numbers, .NET gives three choices. The split that matters is **ba
 | `double` | 8 | 2 (IEEE-754) | ~15–17 | ±1.7 × 10³⁰⁸ | fast (hardware FPU) |
 | `decimal` | 16 | **10** | 28–29 | ±7.9 × 10²⁸ | ~10× slower (software) |
 
-`float` and `double` are **binary** floating point: fast, enormous range, and **approximate** for most decimal fractions. `decimal` is **base-10** floating point: it represents decimal fractions *exactly*, at the cost of speed and range. They are tools for different jobs, not interchangeable sizes of the same tool. (The FPU above is the CPU's hardware *floating-point unit*; `decimal` has no such hardware and runs in software.)
+`float` and `double` are **binary** floating point: fast, enormous range, and **approximate** for most decimal fractions. `decimal` is **base-10** floating point: it represents decimal fractions *exactly*, at the cost of speed and range. The reason `double` is the fast one is no accident: the CPU's silicon counts in base-2, because base-10 is *our* convention, not the machine's. `decimal` is what it costs to make the computer round the way humans do — you're buying back base-10 exactness in software, and the ~10× slowdown is the bill for arguing with the hardware. For money, you pay it gladly. They are tools for different jobs, not interchangeable sizes of the same tool. (The FPU above is the CPU's hardware *floating-point unit*; `decimal` has no such hardware and runs in software.)
 
 ### Why `double` can't hold ten cents
 
@@ -87,7 +89,7 @@ Console.WriteLine(0.1 + 0.2);          // 0.30000000000000004
 Console.WriteLine(0.1 + 0.2 == 0.3);   // False
 ```
 
-This is not a .NET bug; it is arithmetic. In base-2, `0.1` is the repeating fraction `0.0001100110011…` — it has no finite binary representation, exactly as `1/3 = 0.333…` has no finite decimal one. The 64 bits of a `double` store the **nearest representable value**, a hair off. Do arithmetic and those hairs accumulate:
+This is not a .NET bug; it is arithmetic. Start with the case everyone already accepts: in base-10, `1/3 = 0.333…` runs forever — ten just can't write a third in a finite number of digits. Base-2 has the same blind spot, only for different fractions. The rule underneath both: **a base can write a fraction cleanly only when its denominator divides a power of that base.** Base-10 cleans up tenths and hundredths because `10 = 2 × 5`, but still chokes on `1/3`. Base-2 is built only from 2s, so it nails `1/2`, `1/4`, `1/8` and chokes the moment a 5 appears below the line — and `0.1 = 1/10 = 1/(2 × 5)` has exactly that 5. So in base-2, `0.1` becomes the repeating `0.0001100110011…`, with no finite end. The 64 bits of a `double` store the **nearest representable value**, a hair off. Do arithmetic and those hairs accumulate:
 
 ```csharp
 double sum = 0.0;
@@ -109,7 +111,7 @@ Console.WriteLine(sum == 1.0m);  // True
 
 ### Range vs precision — they are different axes
 
-`double` has a colossal **range** (~10³⁰⁸) but only ~15–17 significant **digits**. `decimal` has a modest range (~10²⁸) but ~28–29 exact digits within it. So the question is never "which is bigger" — it's *which axis your value needs*. Money needs exact digits in a human-sized range → `decimal`. A physics simulation needs vast range and tolerates relative error → `double`. (See [Floating-point numeric types (C# reference)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/floating-point-numeric-types), [`System.Decimal`](https://learn.microsoft.com/en-us/dotnet/api/system.decimal), [`System.Double`](https://learn.microsoft.com/en-us/dotnet/api/system.double).)
+`double` has a colossal **range** (~10³⁰⁸) but only ~15–17 significant **digits**. `decimal` has a modest range (~10²⁸) but ~28–29 exact digits within it. Picture two separate dials: *range* is how far the decimal point can travel, *precision* is how many digits stay sharp wherever it lands. `double` can write a number with 300 zeros but blurs after ~15 meaningful digits; `decimal` can't reach those astronomical sizes but keeps ~28 digits dead exact. So the question is never "which is bigger" — it's *which dial your value needs*, and most beginners only know one dial exists. Money needs exact digits in a human-sized range → `decimal`. A physics simulation needs vast range and tolerates relative error → `double`. (See [Floating-point numeric types (C# reference)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/floating-point-numeric-types), [`System.Decimal`](https://learn.microsoft.com/en-us/dotnet/api/system.decimal), [`System.Double`](https://learn.microsoft.com/en-us/dotnet/api/system.double).)
 
 ---
 
@@ -138,7 +140,7 @@ public class Booking
 }
 ```
 
-`MidpointRounding.ToEven` above is **banker's rounding** — a `.5` rounds to the nearest *even* digit (2.5 → 2, 3.5 → 4), which avoids the upward bias of always rounding `.5` up. It is the .NET default; choose it deliberately for money. (See [`MidpointRounding`](https://learn.microsoft.com/en-us/dotnet/api/system.midpointrounding).)
+`MidpointRounding.ToEven` above is **banker's rounding** — a `.5` rounds to the nearest *even* digit (2.5 → 2, 3.5 → 4). The reason matters: "always round `.5` up" tips *every* tie in the same direction, so summed across a million invoices the rounding consistently favors one side and the totals drift. Sending ties up half the time and down half the time keeps the books honest. It is the .NET default; choose it deliberately for money. (See [`MidpointRounding`](https://learn.microsoft.com/en-us/dotnet/api/system.midpointrounding).)
 
 Map it to an exact SQL column — and right-size the precision/scale, just as you would an integer's width:
 
@@ -161,13 +163,15 @@ modelBuilder.Entity<Booking>().OwnsOne(b => b.Total, t =>
 
 ## 2.6 So when *is* `double` the right answer?
 
-`decimal` is for **counted, exact** quantities (money, anything you reconcile). `double` is for **measured, continuous** quantities where a tiny relative error is physically meaningless and range/speed matter:
+Here is the rule that survives once you've forgotten every bit-width: **count with `decimal`, measure with `double`.** The quick test is one question — *would two careful people always agree on the exact value?* A price is $19.90 down to the cent and everyone agrees: it's *counted*, defined by the additions and subtractions, so the digits must be exact → `decimal`. A hotel's latitude is 48.8584-something, and the next digit only depends on how good your instrument is: it's *measured*, an estimate of a real number with no true final digit → `double`, where a tiny relative error is physically meaningless and range and speed earn their keep:
 
 - **Geo-coordinates** — a hotel's latitude/longitude. `double` is standard; the ~15 digits dwarf GPS accuracy. (In SQL you might store `decimal(9,6)` for tidy fixed precision, or a `geography` type for spatial queries.)
 - **Statistics & science** — an average review score, a distance, a load factor, an ML feature. These are estimates; binary floating point is the right, hardware-accelerated tool.
 - **Anything performance-critical and tolerant** — large numeric arrays, graphics, signal processing.
 
 `float` (32-bit) is rarer still in line-of-business code. Its ~7 significant digits are too few for most quantities; reach for it only when memory or bandwidth dominates **and** low precision is acceptable — huge numeric arrays, GPU/ML tensors, 3-D vertex data. For a single field, `double` is the saner default.
+
+That's the entire fork, and it reduces to one question you can ask of any column or field: **am I counting or measuring?** Counted things you reconcile — money, balances, tax — are `decimal`. Measured things you estimate — coordinates, scores, distances — are `double`. The cheat sheet below is just that question, answered row by row.
 
 > **Performance footnote** — `double` runs on the CPU's floating-point unit; `decimal` is implemented in software and is roughly an order of magnitude slower per operation. This matters in tight numeric loops, not in the once-per-request arithmetic of a booking total. **Correctness first** — choose `decimal` for money even though it's slower; choose `double` for a simulation even though it's approximate. Speed breaks the tie only *within* the correct category.
 
