@@ -30,6 +30,7 @@ dotnet run -- 2     # Chapter 2 — Numeric Types
 - Range vs precision as different axes
 - `MidpointRounding.ToEven` (banker's rounding) vs `AwayFromZero`
 
-> Note: the demo is deliberately self-contained (no EF Core / database) so it runs
-> with `dotnet run` and nothing else. The persistence mapping (`OwnsOne`,
-> `HasColumnType`) lives in the book chapters.
+> Note: this project is deliberately self-contained (no EF Core / database) so it
+> runs with `dotnet run` and nothing else. For a runnable **EF Core** version that
+> queries the amenity bitmask against SQLite and prints the generated SQL, see the
+> sibling project [`../demos.efcore`](../demos.efcore).

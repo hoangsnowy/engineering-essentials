@@ -217,19 +217,51 @@ SELECT * FROM Rooms WHERE (Amenities & 12) <> 0;
 
 The pattern generalizes: **AND with a mask projects the value onto only the bits in that mask**, so the bits you didn't ask about literally cannot affect the answer. That projection is the whole idea behind a mask — it's how you ask a precise question of a value that carries more than you care about right now. "Does this room have Wi-Fi?" should not depend on whether it also has a pool, and `& 1` is exactly the act of putting your hand over every bit but the one in the question. `(Amenities & mask) = mask` means "has **all** of mask"; `(Amenities & mask) <> 0` means "has **any** of mask". That is exactly the *Membership* row of the §1.4 table, applied to one or several bits at once. The `&` is SQL Server's [bitwise AND operator](https://learn.microsoft.com/en-us/sql/t-sql/language-elements/bitwise-operators-transact-sql) — the same set-membership test as in C#.
 
-In EF Core you write the same test in LINQ and it translates to that SQL `&` predicate:
+In EF Core you never hand-write that SQL. You write the *same* membership test in LINQ — against the strongly-typed enum — and EF Core translates it to the `&` predicate for you. Given the `Room` from above and a context:
 
 ```csharp
-// WHERE (Amenities & 1) = 1
-var withWifi = db.Rooms
-    .Where(r => (r.Amenities & RoomAmenities.Wifi) == RoomAmenities.Wifi)
-    .ToList();
-
-// EF Core also translates HasFlag to the same bitwise predicate:
-var withWifiToo = db.Rooms
-    .Where(r => r.Amenities.HasFlag(RoomAmenities.Wifi))
-    .ToList();
+public class HotelContext : DbContext
+{
+    public DbSet<Room> Rooms => Set<Room>();
+    protected override void OnConfiguring(DbContextOptionsBuilder o)
+        => o.UseSqlite("Data Source=hotel.db");
+}
 ```
+
+the three questions from the SQL above become three LINQ queries — note it's literally the C# from §1.5, no raw SQL, no string-building:
+
+```csharp
+// "Has Wi-Fi" — single bit
+var withWifi = db.Rooms
+    .Where(r => (r.Amenities & RoomAmenities.Wifi) == RoomAmenities.Wifi);
+
+// "Has BOTH Wi-Fi AND Pool" — multi-bit AND, result must equal the mask
+var need = RoomAmenities.Wifi | RoomAmenities.Pool;          // mask = 9
+var resortish = db.Rooms
+    .Where(r => (r.Amenities & need) == need);
+
+// "Has ANY of Pool or Parking" — multi-bit OR, result just non-zero
+var poolOrParking = db.Rooms
+    .Where(r => (r.Amenities & (RoomAmenities.Pool | RoomAmenities.Parking)) != 0);
+
+// EF Core also translates Enum.HasFlag to the same bitwise predicate:
+var withWifiToo = db.Rooms.Where(r => r.Amenities.HasFlag(RoomAmenities.Wifi));
+```
+
+Don't take the translation on faith — *see* it. [`ToQueryString()`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.entityframeworkcore.entityframeworkqueryableextensions.toquerystring) renders the exact SQL a query will send, without touching the database:
+
+```csharp
+Console.WriteLine(withWifi.ToQueryString());
+```
+```sql
+SELECT "r"."Id", "r"."Amenities", "r"."Number"
+FROM "Rooms" AS "r"
+WHERE "r"."Amenities" & 1 = 1
+```
+
+There it is: your typed enum becomes the `& 1 = 1` membership test from §1.6, generated for you — no join, one column. A mask held in a *variable* (like `need` above) shows up as a parameter — `WHERE "r"."Amenities" & @__need_0 = @__need_0` — same predicate, just parameterized. `ToQueryString()` is the fastest way to confirm a bitmask predicate actually translates to SQL instead of silently falling back to slow client-side evaluation.
+
+> **Run it.** The repo has a runnable EF Core demo against an in-memory SQLite database — [`demos.efcore/`](https://github.com/hoangsnowy/engineering-essentials/tree/main/demos.efcore) — that prints the generated SQL (exactly the blocks above) next to the rooms each query returns. `cd demos.efcore && dotnet run`.
 
 > **The honest caveat.** A bitwise predicate is **non-sargable**: the database can't use an ordinary B-tree index on `Amenities` to jump straight to matching rows, so it reads every row and tests the bits (a full *scan*). ("Sargable" = *Search-ARGument-able*, i.e. index-usable; a B-tree is the ordinary sorted index that powers `=`/`<`/`>` lookups.) For a few thousand rooms this is irrelevant. If you operate at a scale where you constantly filter millions of rows by a *single* amenity, that recurring relational query is itself a signal that the amenity may want to be a first-class, indexable thing — which is the §1.8 decision, not a reason to fear flags.
 
