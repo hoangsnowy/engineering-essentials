@@ -14,6 +14,7 @@
 
 - More
 
+  - [🏨 Interactive demo](https://hoangsnowy.github.io/engineering-essentials/hotel-search.html)
   - [Glossary](glossary.md)
   - [Runnable C# demos](https://github.com/hoangsnowy/engineering-essentials/tree/main/demos)
   - [Roadmap & contributing](/)

@@ -2,6 +2,7 @@
 - Chapters
   - [1 · Enum Flags & Domain Modeling](chapters/01-enum-flags.md)
   - [2 · Choosing the Right Numeric Type](chapters/02-numeric-types.md)
+- [Interactive demo](https://hoangsnowy.github.io/engineering-essentials/hotel-search.html)
 - [Glossary](glossary.md)
 - [Demos](https://github.com/hoangsnowy/engineering-essentials/tree/main/demos)
 - [GitHub](https://github.com/hoangsnowy/engineering-essentials)

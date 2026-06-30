@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel Search — checkboxes are flags, radios are enums</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%233f6fff'/%3E%3Cpath d='M4 4h5a1 1 0 0 1 1 1v7H5a1 1 0 0 1-1-1z' fill='%23fff'/%3E%3C/svg%3E" />
+  <style>
+    :root{
+      --blue:#3f6fff; --blue-dark:#2a52cc; --ink:#1b2533; --muted:#5b6b86;
+      --line:#e3e8f2; --bg:#f5f7fc; --card:#fff; --good:#1f9d55; --code:#c0341d;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--ink); background:var(--bg); padding:24px 16px 64px;
+    }
+    .wrap{max-width:980px; margin:0 auto}
+    header h1{font-size:1.55rem; margin:.2em 0 .1em}
+    header p{color:var(--muted); margin:.2em 0 1.2em}
+    .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+    @media (max-width:760px){ .grid{grid-template-columns:1fr} }
+    .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+      box-shadow:0 1px 2px rgba(20,40,80,.04)}
+    .card h2{font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+      margin:.1em 0 .9em}
+    .tag{font-size:.7rem; font-weight:600; padding:2px 8px; border-radius:999px; vertical-align:middle}
+    .tag.flags{background:#eaf0ff; color:var(--blue-dark)}
+    .tag.enum{background:#fff1e6; color:#b5651d}
+    label.opt{display:flex; align-items:center; gap:10px; padding:8px 6px; border-radius:8px; cursor:pointer}
+    label.opt:hover{background:#f3f6ff}
+    label.opt input{width:18px; height:18px; accent-color:var(--blue)}
+    .bitval{margin-left:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.82rem; color:var(--code); background:#f6f6f6; padding:1px 7px; border-radius:5px}
+    .seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-top:6px}
+    .seg button{border:0; background:#fff; padding:7px 14px; font:inherit; font-size:.85rem; cursor:pointer; color:var(--muted)}
+    .seg button.on{background:var(--blue); color:#fff}
+    .bits{display:flex; gap:6px; margin:2px 0 10px}
+    .bit{flex:1; text-align:center; border:1px solid var(--line); border-radius:8px; padding:6px 0; background:#fafbff}
+    .bit .b{font-family:ui-monospace,monospace; font-size:1.2rem; font-weight:700; color:#aab4c8}
+    .bit.on{border-color:var(--blue); background:#eef3ff}
+    .bit.on .b{color:var(--blue)}
+    .bit .n{font-size:.62rem; color:var(--muted); margin-top:2px}
+    .kv{display:flex; justify-content:space-between; padding:6px 0; border-top:1px dashed var(--line)}
+    .kv b{font-family:ui-monospace,monospace; color:var(--code)}
+    pre{background:#2d2d2d; color:#e6e6e6; border-radius:10px; padding:12px 14px; overflow:auto;
+      font-size:.82rem; margin:.6em 0 0}
+    pre .kw{color:#7aa2ff} pre .num{color:#f7a96b} pre .str{color:#9ece6a}
+    .rooms{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px}
+    @media (max-width:520px){ .rooms{grid-template-columns:1fr} }
+    .room{border:1px solid var(--line); border-radius:10px; padding:10px 12px}
+    .room.hit{border-color:var(--good); background:#f2fbf5}
+    .room .no{font-weight:700}
+    .room .ty{font-size:.72rem; color:var(--muted)}
+    .room .am{font-size:.78rem; color:var(--muted); margin-top:4px}
+    .room .st{float:right; font-family:ui-monospace,monospace; font-size:.74rem; color:var(--code)}
+    .count{color:var(--muted); font-size:.85rem; margin:2px 0 8px}
+    .foot{color:var(--muted); font-size:.82rem; margin-top:22px; text-align:center}
+    .foot a{color:var(--blue)}
+    code{font-family:ui-monospace,monospace; color:var(--code); background:#f6f6f6; padding:1px 5px; border-radius:4px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🏨 Hotel Search</h1>
+    <p>Checkboxes are a <b>[Flags] enum</b> (a set, packed into one integer). Radios are a <b>plain enum</b> (exactly one). Tick things and watch the integer, the SQL, and the results move.</p>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: filters -->
+    <div class="card">
+      <h2>Filters</h2>
+
+      <div style="margin-bottom:14px">
+        <div style="font-weight:600; margin-bottom:2px">Room type <span class="tag enum">radio · plain enum</span></div>
+        <div id="types"></div>
+      </div>
+
+      <div>
+        <div style="font-weight:600; margin-bottom:2px">Amenities <span class="tag flags">checkbox · [Flags]</span></div>
+        <div id="amenities"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div style="font-weight:600; font-size:.9rem">Match</div>
+        <div class="seg" id="mode">
+          <button data-mode="all" class="on">ALL (AND)</button>
+          <button data-mode="any">ANY (OR)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: what the backend sees -->
+    <div class="card">
+      <h2>What the backend sees</h2>
+
+      <div class="bits" id="bits"></div>
+
+      <div class="kv"><span>Amenities mask (decimal)</span> <b id="maskDec">0</b></div>
+      <div class="kv"><span>Mask (binary)</span> <b id="maskBin">0b00000</b></div>
+      <div class="kv"><span><code>[Flags]</code> ToString()</span> <b id="maskStr">None</b></div>
+      <div class="kv"><span>Room type enum</span> <b id="typeVal">Any</b></div>
+
+      <pre id="sql"></pre>
+    </div>
+  </div>
+
+  <!-- results -->
+  <div class="card" style="margin-top:18px">
+    <h2>Matching rooms</h2>
+    <div class="count" id="count"></div>
+    <div class="rooms" id="rooms"></div>
+  </div>
+
+  <div class="foot">
+    Companion to <a href="https://hoangsnowy.github.io/engineering-essentials/#/chapters/01-enum-flags">Chapter 1 — Enum Flags &amp; Domain Modeling</a>.
+    The same logic runs in the C# demo: <code>dotnet run -- 1</code>.
+  </div>
+</div>
+
+<script>
+  // ---- domain (mirrors the book) -------------------------------------------
+  const AMENITIES = [
+    { name: 'Wifi',        bit: 1  },
+    { name: 'Breakfast',   bit: 2  },
+    { name: 'Parking',     bit: 4  },
+    { name: 'Pool',        bit: 8  },
+    { name: 'PetFriendly', bit: 16 },
+  ];
+  const TYPES = ['Any', 'Standard', 'Deluxe', 'Suite']; // Any = no filter; enum starts at Standard=0
+
+  const ROOMS = [
+    { no: 101, type: 'Standard', a: 1  },  // {Wifi}
+    { no: 102, type: 'Standard', a: 3  },  // {Wifi,Breakfast}
+    { no: 103, type: 'Deluxe',   a: 7  },  // {Wifi,Breakfast,Parking}
+    { no: 104, type: 'Deluxe',   a: 13 },  // {Wifi,Parking,Pool}
+    { no: 105, type: 'Suite',    a: 15 },  // {Wifi,Breakfast,Parking,Pool}
+    { no: 106, type: 'Suite',    a: 31 },  // all five
+    { no: 107, type: 'Standard', a: 8  },  // {Pool}
+    { no: 108, type: 'Deluxe',   a: 6  },  // {Breakfast,Parking}
+  ];
+
+  let mask = 0;          // OR of checked amenity bits
+  let mode = 'all';      // 'all' = AND, 'any' = OR
+  let type = 'Any';
+
+  // ---- helpers --------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+  const setName = (v) => {
+    if (v === 0) return 'None';
+    return AMENITIES.filter(x => (v & x.bit) === x.bit).map(x => x.name).join(', ');
+  };
+  const bin5 = (v) => '0b' + v.toString(2).padStart(5, '0');
+
+  // ---- build filter controls ------------------------------------------------
+  TYPES.forEach(t => {
+    const l = document.createElement('label'); l.className = 'opt';
+    l.innerHTML = `<input type="radio" name="type" value="${t}" ${t==='Any'?'checked':''}>
+      <span>${t}</span>${t!=='Any'?`<span class="bitval">${TYPES.indexOf(t)-1}</span>`:''}`;
+    l.querySelector('input').addEventListener('change', () => { type = t; render(); });
+    $('types').appendChild(l);
+  });
+
+  AMENITIES.forEach(am => {
+    const l = document.createElement('label'); l.className = 'opt';
+    l.innerHTML = `<input type="checkbox" value="${am.bit}">
+      <span>${am.name}</span><span class="bitval">${am.bit}</span>`;
+    l.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) mask |= am.bit; else mask &= ~am.bit;
+      render();
+    });
+    $('amenities').appendChild(l);
+  });
+
+  $('mode').addEventListener('click', (e) => {
+    if (!e.target.dataset.mode) return;
+    mode = e.target.dataset.mode;
+    [...$('mode').children].forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    render();
+  });
+
+  // ---- render ---------------------------------------------------------------
+  function render() {
+    // bit lamps
+    $('bits').innerHTML = AMENITIES.map(am => {
+      const on = (mask & am.bit) === am.bit;
+      return `<div class="bit ${on?'on':''}"><div class="b">${on?1:0}</div><div class="n">${am.name}<br>${am.bit}</div></div>`;
+    }).join('');
+
+    $('maskDec').textContent = mask;
+    $('maskBin').textContent = bin5(mask);
+    $('maskStr').textContent = setName(mask);
+    $('typeVal').textContent = type === 'Any' ? 'Any (no filter)' : `${type} = ${TYPES.indexOf(type)-1}`;
+
+    // generated SQL
+    const where = [];
+    if (type !== 'Any') where.push(`RoomType = <span class="num">${TYPES.indexOf(type)-1}</span>`);
+    if (mask !== 0) {
+      where.push(mode === 'all'
+        ? `(Amenities & <span class="num">${mask}</span>) = <span class="num">${mask}</span>`
+        : `(Amenities & <span class="num">${mask}</span>) <> <span class="num">0</span>`);
+    }
+    const clause = where.length ? '\n<span class="kw">WHERE</span> ' + where.join('\n  <span class="kw">AND</span> ') : '';
+    $('sql').innerHTML = `<span class="kw">SELECT</span> * <span class="kw">FROM</span> Rooms${clause};`;
+
+    // filter rooms
+    const hits = ROOMS.filter(r => {
+      if (type !== 'Any' && r.type !== type) return false;
+      if (mask === 0) return true;
+      return mode === 'all' ? (r.a & mask) === mask : (r.a & mask) !== 0;
+    });
+
+    $('count').textContent = `${hits.length} of ${ROOMS.length} rooms match`;
+    $('rooms').innerHTML = ROOMS.map(r => {
+      const hit = hits.includes(r);
+      return `<div class="room ${hit?'hit':''}">
+        <span class="st">${r.a}</span>
+        <div class="no">Room ${r.no}</div>
+        <div class="ty">${r.type}</div>
+        <div class="am">${setName(r.a)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  render();
+</script>
+</body>
+</html>

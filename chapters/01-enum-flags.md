@@ -43,6 +43,8 @@ A booking's notification preferences can be email **and** SMS **and** push, all 
 
 The mistake in §1.1 is reaching past "a set of checkboxes" — a thing the type system models in one field — for "a network of related tables."
 
+> **See it move.** The [🏨 interactive hotel search](https://hoangsnowy.github.io/engineering-essentials/hotel-search.html) wires this up live: the room-type **radio** is a plain enum (one value), the amenity **checkboxes** are a `[Flags]` set — tick them and watch the single integer, the generated SQL, and the matching rooms update in real time.
+
 ---
 
 ## 1.3 A plain enum is just named integers
