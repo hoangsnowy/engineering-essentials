@@ -12,6 +12,10 @@
 
   - [2 · Choosing the Right Numeric Type](chapters/02-numeric-types.md)
 
+- Part III · Correctness Under Load
+
+  - [3 · Concurrency Control & the Double-Booking Bug](chapters/03-concurrency-control.md)
+
 - More
 
   - [🏨 Interactive demo](https://hoangsnowy.github.io/engineering-essentials/hotel-search.html)

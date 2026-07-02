@@ -41,4 +41,18 @@ might bounce off, in one line each. External links are all Microsoft Learn.
 - **`varint`** — a variable-length integer encoding (e.g. protobuf): small numbers take 1 byte, large ones up to 5.
 - **Egress** — outbound data leaving a cloud network; a metered, billed line item.
 
+## Concurrency & locking
+
+- **Race condition** — a bug that only appears when two operations overlap in time; correct in isolation, wrong under concurrent load.
+- **Check-then-act / read-modify-write** — reading some state, deciding based on it, then writing — two operations, not one, with a gap in between where another request can slip in.
+- **Lost update** — two concurrent read-modify-write sequences interleave so the second write silently overwrites or ignores the effect of the first; no error, no log line, just wrong data.
+- **Isolation level** — how much a transaction is shielded from other concurrent transactions; SQL Server defaults to `READ COMMITTED`, which prevents dirty reads but **not** lost updates. See [`SET TRANSACTION ISOLATION LEVEL`](https://learn.microsoft.com/en-us/sql/t-sql/statements/set-transaction-isolation-level-transact-sql).
+- **Dirty read** — reading a row another transaction has written but not yet committed; `READ COMMITTED` and above prevent this.
+- **Pessimistic concurrency** — lock the row before you read it, so no other transaction can read-and-act on it until you're done; correct under heavy contention, at the cost of serialized throughput and deadlock risk. SQL Server: `SELECT ... WITH (UPDLOCK, ROWLOCK)`; Postgres/MySQL: `SELECT ... FOR UPDATE`.
+- **Optimistic concurrency** — take no lock; instead check at write time whether the row changed since you read it, using a concurrency token. Cheap on the common (no-conflict) path.
+- **Concurrency token** — a mapped property EF Core folds into the `WHERE` clause of every generated `UPDATE`/`DELETE`; if zero rows match, someone else wrote first. See [EF Core — Handling concurrency conflicts](https://learn.microsoft.com/en-us/ef/core/saving/concurrency).
+- **`rowversion`** — SQL Server's database-generated concurrency token: an 8-byte, auto-incrementing binary counter, *not* a wall-clock timestamp despite the legacy name `timestamp`. See [`rowversion` (Transact-SQL)](https://learn.microsoft.com/en-us/sql/t-sql/data-types/rowversion-transact-sql).
+- **`DbUpdateConcurrencyException`** — the exception EF Core's `SaveChanges()` throws when an `UPDATE`/`DELETE` affects zero rows because a concurrency token no longer matches. See [`DbUpdateConcurrencyException`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.entityframeworkcore.dbupdateconcurrencyexception).
+- **Deadlock** — two transactions each waiting on a lock the other holds; the database detects this and kills one transaction to break the cycle.
+
 > Back to the [Introduction](/).

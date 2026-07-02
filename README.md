@@ -24,7 +24,11 @@ To keep things concrete, the whole book models one familiar domain — a **hotel
 
 2. [Choosing the Right Numeric Type](chapters/02-numeric-types.md) — why defaulting everything to `int` wastes bandwidth, storage, and money; integer sizing; and the `decimal` vs `double` vs `float` decision that protects your money values.
 
-New to a term? The [Glossary](glossary.md) defines the jargon (sargable, CLS-compliant, banker's rounding, …) in one line each.
+**Part III · Correctness Under Load**
+
+3. [Concurrency Control & the Double-Booking Bug](chapters/03-concurrency-control.md) — why two guests can both get a "confirmed" booking for the same room, why wrapping the code in a transaction doesn't fix it, and the pessimistic-locking vs optimistic-concurrency decision (with EF Core's `DbUpdateConcurrencyException`) that does.
+
+New to a term? The [Glossary](glossary.md) defines the jargon (sargable, CLS-compliant, banker's rounding, lost update, concurrency token, …) in one line each.
 
 ## Roadmap
 
@@ -44,6 +48,7 @@ Every chapter ships with a runnable console demo under [`demos/`](demos/) — th
 cd demos
 dotnet run -- 1   # Chapter 1 — Enum Flags & Domain Modeling
 dotnet run -- 2   # Chapter 2 — Numeric Types
+dotnet run -- 3   # Chapter 3 — Concurrency Control
 ```
 
 ## Run it locally

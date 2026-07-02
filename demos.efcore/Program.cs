@@ -62,6 +62,10 @@ internal static class Program
 
         Show("HasFlag(Wifi) — EF translates it to the same predicate",
             db.Rooms.Where(r => r.Amenities.HasFlag(RoomAmenities.Wifi)));
+
+        // Chapter 3 §3.4 — optimistic concurrency with a real DbUpdateConcurrencyException.
+        // Runs on its own isolated in-memory SQLite database; see ConcurrencyDemo.cs for why.
+        ConcurrencyDemo.Run();
     }
 
     private static void Show(string title, IQueryable<Room> query)

@@ -216,4 +216,6 @@ That's the entire fork, and it reduces to one question you can ask of any column
 - [Language independence and the CLS](https://learn.microsoft.com/en-us/dotnet/standard/language-independence)
 - SQL Server: [int, bigint, smallint, and tinyint](https://learn.microsoft.com/en-us/sql/t-sql/data-types/int-bigint-smallint-and-tinyint-transact-sql) · [decimal and numeric](https://learn.microsoft.com/en-us/sql/t-sql/data-types/decimal-and-numeric-transact-sql) · [money and smallmoney](https://learn.microsoft.com/en-us/sql/t-sql/data-types/money-and-smallmoney-transact-sql)
 
+> Next: right-sizing a *type* only helps if the *operation* around it is safe under concurrent load — why two guests can both get a "confirmed" booking for the same room, and the pessimistic-locking vs optimistic-concurrency decision that stops it. → [Chapter 3](chapters/03-concurrency-control.md)
+
 > Back to the [Introduction](/) · Previous: [Chapter 1 — Enum Flags & Domain Modeling](chapters/01-enum-flags.md)

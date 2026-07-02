@@ -8,9 +8,10 @@ Requires the .NET SDK (any of 8 / 9 / 10 — the project targets **net8.0**).
 ```bash
 cd demos
 
-dotnet run          # run both chapters
+dotnet run          # run all chapters
 dotnet run -- 1     # Chapter 1 — Enum Flags & Domain Modeling
 dotnet run -- 2     # Chapter 2 — Numeric Types
+dotnet run -- 3     # Chapter 3 — Concurrency Control
 ```
 
 ## What each chapter shows
@@ -29,6 +30,11 @@ dotnet run -- 2     # Chapter 2 — Numeric Types
 - Money in `double` failing to reconcile
 - Range vs precision as different axes
 - `MidpointRounding.ToEven` (banker's rounding) vs `AwayFromZero`
+
+**Chapter 3 — `Chapter03Concurrency.cs`**
+- The lost-update bug, reproduced deterministically: two tasks race a naive check-then-act booking method for the same room + night, forced to interleave, and both "win"
+- Pessimistic fix — a `SemaphoreSlim` gate around the whole check-then-act, the in-memory analog of `SELECT ... WITH (UPDLOCK, ROWLOCK)`
+- Optimistic fix — a versioned compare-and-swap with a bounded retry loop, the in-memory analog of EF Core's `[ConcurrencyCheck]` + `DbUpdateConcurrencyException` + retry
 
 > Note: this project is deliberately self-contained (no EF Core / database) so it
 > runs with `dotnet run` and nothing else. For a runnable **EF Core** version that
